@@ -1,15 +1,10 @@
-# Format proxy yang didukung (satu proxy per baris):
-#
-# Tanpa autentikasi:
-#   protocol://host:port
-#
-# Dengan autentikasi:
-#   protocol://user:pass@host:port
-#
-# Protocol yang didukung: http, https, socks5
-#
-# Contoh:
-# http://203.0.113.10:3128
-# socks5://203.0.113.20:1080
-# http://username:password@203.0.113.30:8080
-# socks5://username:password@203.0.113.40:1080
+38.154.203.95:5863:qhyyiskc:edmz9x4ic5ke
+198.105.121.200:6462:qhyyiskc:edmz9x4ic5ke
+64.137.96.74:6641:qhyyiskc:edmz9x4ic5ke
+209.127.138.10:5784:qhyyiskc:edmz9x4ic5ke
+38.154.185.97:6370:qhyyiskc:edmz9x4ic5ke
+84.247.60.125:6095:qhyyiskc:edmz9x4ic5ke
+142.111.67.146:5611:qhyyiskc:edmz9x4ic5ke
+191.96.254.138:6185:qhyyiskc:edmz9x4ic5ke
+31.58.9.4:6077:qhyyiskc:edmz9x4ic5ke
+104.239.107.47:5699:qhyyiskc:edmz9x4ic5ke
