@@ -98,6 +98,17 @@ class ClearanceAPIServer:
     async def _create_context_with_proxy(self, proxy: str = None):
         if not proxy:
             return await self.browser.new_context()
+        
+        # Auto-convert IP:PORT:USER:PASS or IP:PORT format
+        proxy = proxy.strip()
+        parts = proxy.split(':')
+        if len(parts) == 4:
+            ip, port, user, password = parts
+            proxy = f"http://{user}:{password}@{ip}:{port}"
+        elif len(parts) == 2:
+            ip, port = parts
+            proxy = f"http://{ip}:{port}"
+            
         from urllib.parse import urlparse
         parsed = urlparse(proxy)
         if not parsed.scheme or not parsed.hostname:
