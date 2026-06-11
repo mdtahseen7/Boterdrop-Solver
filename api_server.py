@@ -71,6 +71,7 @@ class ClearanceAPIServer:
         self.app.get("/aws-token")(self.process_aws_token)
         self.app.get("/recaptchaV3")(self.process_recaptcha)
         self.app.post("/recaptchaV3")(self.process_recaptcha)
+        self.app.get("/scrape")(self.process_scrape)
 
     # ──────────────────────────────────────────────
     #  PROXY
@@ -520,6 +521,48 @@ class ClearanceAPIServer:
             else:
                 logger.info(f"[Clearance] Page dibuang (context sudah di-restart oleh cleanup) — {task_id}")
 
+    async def _solve_scrape(self, task_id: str, url: str, timeout: int = 30):
+        start_time = time.time()
+        page, context = await self.page_pool.get()
+        try:
+            logger.info(f"[Scraper] Navigating to {url} — {task_id}")
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=timeout * 1000)
+            
+            # Wait if Cloudflare Turnstile challenge is active
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                title = await page.title()
+                if "just a moment" not in title.lower():
+                    break
+                await asyncio.sleep(1)
+
+            # Extract content. If it's an API JSON response, grab the innerText of body
+            content = await page.evaluate("document.body.innerText")
+            if not content.strip() or content.strip().startswith("<html"):
+                content = await page.content()
+
+            self.results[task_id] = {
+                "status": "success",
+                "elapsed_time": round(time.time() - start_time, 3),
+                "content": content,
+                "status_code": response.status if response else 200
+            }
+            logger.success(f"[Scraper] Sukses — {task_id}")
+        except Exception as e:
+            elapsed = round(time.time() - start_time, 3)
+            self.results[task_id] = {
+                "status": "error",
+                "elapsed_time": elapsed,
+                "value": "scrape_fail",
+                "message": str(e)
+            }
+            logger.error(f"[Scraper] Exception — {task_id}: {e}")
+        finally:
+            if context in self.contexts:
+                await self.page_pool.put((page, context))
+            else:
+                logger.info(f"[Scraper] Page dibuang (context sudah di-restart) — {task_id}")
+
     # ──────────────────────────────────────────────
     #  AWS WAF TOKEN SOLVER
     # ──────────────────────────────────────────────
@@ -914,6 +957,26 @@ class ClearanceAPIServer:
         self.results[task_id] = {"status": "process", "message": "solving clearance", "start_time": time.time()}
         try:
             asyncio.create_task(self._solve_clearance(task_id, url, timeout))
+            return JSONResponse(content={"task_id": task_id, "status": "accepted"}, status_code=202)
+        except Exception as e:
+            self.results.pop(task_id, None)
+            return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
+
+    async def process_scrape(
+        self,
+        url: str = Query(..., description="URL target untuk di-scrape"),
+        timeout: int = Query(30, description="Waktu tunggu maksimal (detik)"),
+    ):
+        if not url:
+            raise HTTPException(status_code=400, detail={"status": "error", "error": "Parameter 'url' wajib diisi"})
+
+        if self.page_pool.qsize() == 0:
+            return JSONResponse(content={"status": "error", "error": "Server penuh, coba lagi nanti"}, status_code=429)
+
+        task_id = str(uuid.uuid4())
+        self.results[task_id] = {"status": "process", "message": "scraping page", "start_time": time.time()}
+        try:
+            asyncio.create_task(self._solve_scrape(task_id, url, timeout))
             return JSONResponse(content={"task_id": task_id, "status": "accepted"}, status_code=202)
         except Exception as e:
             self.results.pop(task_id, None)
